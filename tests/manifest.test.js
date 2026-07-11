@@ -10,7 +10,17 @@ test("manifest is narrowly scoped Manifest V3", async () => {
   assert.equal(manifest.action.default_popup, "popup.html");
   assert.deepEqual(manifest.host_permissions, ["https://bigmodel.cn/glm-coding*"]);
   assert.deepEqual(manifest.content_scripts[0].matches, ["https://bigmodel.cn/glm-coding*"]);
-  assert.deepEqual([...manifest.permissions].sort(), ["alarms", "notifications", "storage", "tabs"]);
+  assert.deepEqual([...manifest.permissions].sort(), ["notifications", "storage", "tabs"]);
+});
+
+test("runtime is mutation-driven and clears refresh before click", async () => {
+  const content = await readFile("content.js", "utf8");
+  const background = await readFile("background.js", "utf8");
+  assert.match(content, /new MutationObserver/);
+  assert.match(content, /function clearRuntimeTimers/);
+  assert.match(content, /clearRefreshTimer\(\);\s*button\.click\(\)/);
+  assert.match(content, /classifySuccess/);
+  assert.doesNotMatch(background, /chrome\.alarms/);
 });
 
 test("manifest references local runtime files", async () => {

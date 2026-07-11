@@ -1,62 +1,62 @@
 (() => {
-  let timer = null;
-  let run = null;
-  let settings = null;
+  let run = null, settings = null, scanTimer = null, refreshTimer = null, sprintTimer = null, observer = null;
+  let capacityAttempts = 0, riskAttempts = 0, inspecting = false;
   const textOf = (node) => String(node?.innerText ?? node?.textContent ?? "").replace(/\s+/g, "").trim();
-  const visible = (node) => {
-    const style = getComputedStyle(node);
-    const rect = node.getBoundingClientRect();
-    return style.display !== "none" && style.visibility !== "hidden" && Number(style.opacity) !== 0 && rect.width > 0 && rect.height > 0;
-  };
+  const visible = (node) => { const s = getComputedStyle(node), r = node.getBoundingClientRect(); return s.display !== "none" && s.visibility !== "hidden" && Number(s.opacity) !== 0 && r.width > 0 && r.height > 0; };
   const purchaseLabel = (text) => [/^立即购买$/, /^购买(?:套餐|方案|计划)?$/, /^立即订阅$/, /^订阅(?:套餐|方案|计划)?$/].some((re) => re.test(text));
+  const classifySuccess = () => /\/(order|checkout|payment)(\/|\?|$)/i.test(location.href) || /(订单创建成功|购买成功|支付二维码|确认订单|订单编号)/.test(textOf(document.body));
+  const capacityDelay = () => [1,1,2,3,5,8][Math.min(capacityAttempts++,5)];
+  const riskDelay = () => [30,60,120][Math.min(riskAttempts++,2)];
+  const ordinaryDelay = () => settings.mode === "sprint" ? settings.refreshSeconds : Math.round(settings.refreshSeconds * (0.9 + Math.random() * 0.2) * 10) / 10;
 
+  function clearRefreshTimer() { if (refreshTimer) clearTimeout(refreshTimer); refreshTimer = null; }
+  function clearRuntimeTimers() { if (scanTimer) clearInterval(scanTimer); if (sprintTimer) clearTimeout(sprintTimer); clearRefreshTimer(); observer?.disconnect(); scanTimer = sprintTimer = observer = null; }
+  function publish(patch) { chrome.runtime.sendMessage({ type: "RUNTIME_STATUS", patch }).catch(() => {}); }
+  function scheduleRefresh(reason = "ordinary") {
+    clearRefreshTimer();
+    if (!run?.active || run.clickClaimed || !settings?.autoRefresh) return;
+    const seconds = reason === "capacity" ? capacityDelay() : reason === "risk" ? riskDelay() : ordinaryDelay();
+    publish({ nextRefreshAt: Date.now() + seconds * 1000, backoffReason: reason });
+    refreshTimer = setTimeout(() => { if (run?.active && !run.clickClaimed) location.reload(); }, seconds * 1000);
+  }
   function dismissCapacityNotice() {
-    const containers = [...document.querySelectorAll('[role="dialog"], .ant-modal, .el-dialog, [aria-modal="true"]')];
-    const dialog = containers.find((node) => visible(node) && textOf(node).includes("购买人数过多"));
+    const dialog = [...document.querySelectorAll('[role="dialog"],.ant-modal,.el-dialog,[aria-modal="true"]')].find((n) => visible(n) && textOf(n).includes("购买人数过多"));
     if (!dialog) return false;
-    const controls = [...dialog.querySelectorAll('button, [role="button"], [aria-label]')];
-    const close = controls.find((node) => visible(node) && /^(关闭|取消|确定|知道了|×)$/.test(textOf(node) || node.getAttribute("aria-label") || ""));
-    if (!close) return false;
-    close.click();
-    chrome.runtime.sendMessage({ type: "ADD_LOG", message: "已关闭购买人数过多提示" });
+    const close = [...dialog.querySelectorAll('button,[role="button"],[aria-label]')].find((n) => visible(n) && /^(关闭|取消|确定|知道了|×)$/.test(textOf(n) || n.getAttribute("aria-label") || ""));
+    if (close) close.click();
     return true;
   }
-
   function eligiblePurchaseButton() {
-    return [...document.querySelectorAll('button, [role="button"], a')].find((node) => {
-      const disabled = node.disabled || node.getAttribute("aria-disabled") === "true" || node.classList.contains("disabled");
-      const busy = node.getAttribute("aria-busy") === "true" || /loading|加载中/i.test(node.className);
-      return visible(node) && !disabled && !busy && purchaseLabel(textOf(node));
-    });
+    return [...document.querySelectorAll('button,[role="button"],a')].find((n) => visible(n) && !n.disabled && n.getAttribute("aria-disabled") !== "true" && n.getAttribute("aria-busy") !== "true" && !/loading|加载中/i.test(n.className) && purchaseLabel(textOf(n)));
   }
-
   async function inspect() {
-    if (!run?.active || run.clickClaimed) return stopTimer();
-    dismissCapacityNotice();
-    const button = eligiblePurchaseButton();
-    await chrome.runtime.sendMessage({ type: "CHECK_RECORDED", status: button ? "发现可用购买按钮" : "等待购买按钮可用" });
-    if (!button) return;
-    const claim = await chrome.runtime.sendMessage({ type: "CLAIM_CLICK" });
-    if (!claim?.claimed) return stopTimer();
-    button.click();
-    run.clickClaimed = true;
-    run.active = false;
-    stopTimer();
-    if (settings?.soundEnabled) {
-      try {
-        const audio = new AudioContext();
-        const oscillator = audio.createOscillator();
-        oscillator.connect(audio.destination); oscillator.frequency.value = 880; oscillator.start(); oscillator.stop(audio.currentTime + 0.25);
-      } catch {}
-    }
-    await chrome.runtime.sendMessage({ type: "CLICK_COMPLETED" });
+    if (inspecting || !run?.active) return; inspecting = true;
+    try {
+      if (run.clickClaimed) { if (classifySuccess()) { clearRuntimeTimers(); publish({ active:false,status:"已进入订单或支付步骤" }); } return; }
+      const capacity = dismissCapacityNotice();
+      const pageText = textOf(document.body);
+      const risk = /(请求过于频繁|访问受限|风控|429)/.test(pageText);
+      const button = eligiblePurchaseButton();
+      await chrome.runtime.sendMessage({ type:"CHECK_RECORDED", status:button ? "发现可用购买按钮" : "等待购买按钮可用" });
+      if (!button) { scheduleRefresh(risk ? "risk" : capacity ? "capacity" : "ordinary"); return; }
+      const claim = await chrome.runtime.sendMessage({ type:"CLAIM_CLICK" });
+      if (!claim?.claimed) return clearRuntimeTimers();
+      clearRefreshTimer();
+      button.click();
+      run.clickClaimed = true;
+      publish({ clickClaimed:true,nextRefreshAt:null,backoffReason:"clicked",status:"已点击一次，等待手动完成后续步骤" });
+      if (settings.soundEnabled) try { const a=new AudioContext(),o=a.createOscillator();o.connect(a.destination);o.frequency.value=880;o.start();o.stop(a.currentTime+.25); } catch {}
+      await chrome.runtime.sendMessage({ type:"CLICK_COMPLETED" });
+    } finally { inspecting = false; }
   }
-
-  function stopTimer() { if (timer) clearInterval(timer); timer = null; }
   function applyState(nextRun, nextSettings) {
-    stopTimer(); run = nextRun; settings = nextSettings;
-    if (run?.active && !run.clickClaimed) { inspect(); timer = setInterval(inspect, Math.max(3, settings.detectionSeconds) * 1000); }
+    clearRuntimeTimers(); run = nextRun; settings = nextSettings;
+    if (!run?.active) return;
+    observer = new MutationObserver(() => queueMicrotask(inspect)); observer.observe(document.documentElement,{subtree:true,childList:true,attributes:true,attributeFilter:["disabled","aria-disabled","class"]});
+    scanTimer = setInterval(inspect, Math.max(100, settings.scanMs));
+    if (settings.mode === "sprint") sprintTimer = setTimeout(() => { settings={...settings,mode:"balanced",scanMs:200,refreshSeconds:3}; publish({mode:"balanced",status:"冲刺结束，已恢复平衡模式"}); applyState(run,settings); },300000);
+    inspect(); scheduleRefresh();
   }
-  chrome.runtime.onMessage.addListener((message) => { if (message.type === "MONITORING_STATE") applyState(message.run, message.settings); });
-  chrome.runtime.sendMessage({ type: "GET_STATE" }).then((state) => applyState(state.run, state.settings)).catch(() => {});
+  chrome.runtime.onMessage.addListener((m) => { if (m.type === "MONITORING_STATE") applyState(m.run,m.settings); });
+  chrome.runtime.sendMessage({type:"GET_STATE"}).then((s)=>applyState(s.run,s.settings)).catch(()=>{});
 })();

@@ -1,7 +1,6 @@
 import { DEFAULT_SETTINGS, normalizeSettings, createRunState, claimSingleClick, appendBoundedLog } from "./src/state.js";
 
 const STORAGE = { settings: "settings", runs: "runs", logs: "logs" };
-const alarmName = (tabId) => `refresh:${tabId}`;
 const nowText = () => new Date().toLocaleString("zh-CN", { hour12: false });
 
 async function readStore() {
@@ -21,13 +20,6 @@ async function log(message, level = "info") {
 async function saveRun(run) {
   const { runs } = await readStore();
   await chrome.storage.local.set({ runs: { ...runs, [run.tabId]: run } });
-}
-
-async function configureRefresh(tabId, settings, active) {
-  await chrome.alarms.clear(alarmName(tabId));
-  if (active && settings.autoRefresh) {
-    chrome.alarms.create(alarmName(tabId), { periodInMinutes: settings.refreshSeconds / 60 });
-  }
 }
 
 async function alertUser(settings) {
@@ -57,9 +49,15 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       return { ok: true, settings };
     }
     if (message.type === "START_MONITORING") {
-      const run = createRunState(tabId);
+      for (const prior of Object.values(store.runs)) {
+        if (prior.active && prior.tabId !== tabId) {
+          const stopped = { ...prior, active: false, status: "已由其他标签页接管" };
+          await saveRun(stopped);
+          await chrome.tabs.sendMessage(prior.tabId, { type: "MONITORING_STATE", run: stopped, settings: store.settings }).catch(() => {});
+        }
+      }
+      const run = { ...createRunState(tabId), mode: store.settings.mode };
       await saveRun(run);
-      await configureRefresh(tabId, store.settings, true);
       await log(`标签页 ${tabId} 开始监测`);
       await chrome.tabs.sendMessage(tabId, { type: "MONITORING_STATE", run, settings: store.settings }).catch(() => {});
       return { ok: true, run };
@@ -67,7 +65,6 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     if (message.type === "STOP_MONITORING") {
       const run = { ...(store.runs[tabId] ?? {}), tabId, active: false, status: "已停止" };
       await saveRun(run);
-      await configureRefresh(tabId, store.settings, false);
       await chrome.tabs.sendMessage(tabId, { type: "MONITORING_STATE", run, settings: store.settings }).catch(() => {});
       return { ok: true, run };
     }
@@ -81,11 +78,15 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       if (current?.active) await saveRun({ ...current, checks: (current.checks ?? 0) + 1, lastCheckAt: Date.now(), status: message.status });
       return { ok: true };
     }
+    if (message.type === "RUNTIME_STATUS") {
+      const current = store.runs[tabId];
+      if (current) await saveRun({ ...current, ...message.patch });
+      return { ok: true };
+    }
     if (message.type === "ADD_LOG") { await log(message.message, message.level); return { ok: true }; }
     if (message.type === "CLICK_COMPLETED") {
       const run = { ...(store.runs[tabId] ?? {}), active: false, clickClaimed: true, status: "已点击一次，请手动完成后续步骤" };
       await saveRun(run);
-      await configureRefresh(tabId, store.settings, false);
       await log(`标签页 ${tabId} 已单次点击购买按钮`);
       await alertUser(store.settings);
       return { ok: true };
@@ -93,12 +94,4 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return { ok: false, error: "未知消息" };
   })().then(sendResponse).catch((error) => sendResponse({ ok: false, error: error.message }));
   return true;
-});
-
-chrome.alarms.onAlarm.addListener(async (alarm) => {
-  if (!alarm.name.startsWith("refresh:")) return;
-  const tabId = Number(alarm.name.split(":")[1]);
-  const { runs } = await readStore();
-  if (runs[tabId]?.active && !runs[tabId]?.clickClaimed) await chrome.tabs.reload(tabId);
-  else await chrome.alarms.clear(alarm.name);
 });
