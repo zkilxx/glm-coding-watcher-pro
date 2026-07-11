@@ -1,0 +1,8 @@
+<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>GLM Coding 监测助手</title><link rel="stylesheet" href="popup.css"></head><body>
+<main><header><span class="mark">G</span><div><h1>GLM Coding 监测助手</h1><p>低频监测 · 单次点击 · 后续手动</p></div></header>
+<section class="status"><span id="dot"></span><div><small>当前状态</small><strong id="status">正在读取…</strong></div></section>
+<section class="settings"><label>检测间隔（秒）<input id="detection" type="number" min="3" step="1"></label><label class="toggle"><input id="autoRefresh" type="checkbox"><span>自动刷新页面</span></label><label>刷新间隔（秒）<input id="refresh" type="number" min="30" step="1"></label><label class="toggle"><input id="sound" type="checkbox"><span>声音提醒</span></label><label class="toggle"><input id="notifications" type="checkbox"><span>桌面通知</span></label></section>
+<div class="actions"><button id="start">开始监测</button><button id="stop" class="secondary">停止</button></div>
+<section class="stats"><span>检测 <b id="checks">0</b> 次</span><span>上次 <b id="last">—</b></span></section>
+<details><summary>运行日志</summary><div id="logs"></div></details><p class="notice">不会绕过验证码、登录、限流、风控或支付确认。</p>
+</main><script src="popup.js"></script></body></html>
