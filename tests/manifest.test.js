@@ -18,3 +18,9 @@ test("manifest references local runtime files", async () => {
     await access(file);
   }
 });
+
+test("repository documents installation and safety boundaries", async () => {
+  for (const file of ["README.md", "LICENSE", "SECURITY.md", ".gitignore"]) await access(file);
+  const readme = await readFile("README.md", "utf8");
+  for (const phrase of ["验证码", "登录", "限流", "风控", "支付确认", "Download ZIP"]) assert.match(readme, new RegExp(phrase));
+});
