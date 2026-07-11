@@ -41,9 +41,10 @@ test("repository documents installation and safety boundaries", async () => {
 test("popup and README explain success-oriented timing", async () => {
   const popup = await readFile("popup.html", "utf8");
   const readme = await readFile("README.md", "utf8");
-  for (const phrase of ["稳健", "平衡", "冲刺", "100", "1 秒", "5 分钟", "点击后立即停止刷新"]) {
+  for (const phrase of ["稳健", "平衡", "冲刺", "100", "不可购买立即刷新", "5 分钟", "点击后立即停止刷新"]) {
     assert.match(popup + readme, new RegExp(phrase.replace(" ", "\\s*")));
   }
 });
 test("popup keeps live status without redrawing priority editing",async()=>{const popup=await readFile("popup.js","utf8");const background=await readFile("background.js","utf8");assert.match(popup,/function renderRuntime/);assert.match(popup,/setInterval\(.*refreshRuntime.*500\)/s);assert.match(popup,/监测运行中/);assert.match(background,/nextRefreshAt:\s*null/);});
-test("active monitoring always schedules page refresh",async()=>{const content=await readFile("content.js","utf8");const html=await readFile("popup.html","utf8");assert.doesNotMatch(content,/settings\?\.autoRefresh/);assert.doesNotMatch(html,/id="autoRefresh"/);assert.match(html,/页面刷新间隔/);assert.match(content,/location\.reload\(\)/);});
+test("active monitoring always refreshes unavailable pages",async()=>{const content=await readFile("content.js","utf8");const html=await readFile("popup.html","utf8");assert.doesNotMatch(content,/settings\?\.autoRefresh/);assert.doesNotMatch(html,/id="autoRefresh"/);assert.match(html,/不可购买立即刷新/);assert.match(content,/location\.reload\(\)/);});
+test("unavailable targets reload immediately without a refresh timer",async()=>{const content=await readFile("content.js","utf8");const html=await readFile("popup.html","utf8");assert.doesNotMatch(content,/refreshTimer\s*=\s*setTimeout/);assert.doesNotMatch(content,/等待页面刷新/);assert.doesNotMatch(html,/id="refresh"/);assert.match(content,/if \(token===cycleToken\) reloadImmediately\(\)/);});
