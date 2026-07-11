@@ -7,6 +7,7 @@ export const DEFAULT_SETTINGS = Object.freeze({
   refreshSeconds: 3,
   soundEnabled: true,
   notificationsEnabled: true
+  ,planPriority: []
 });
 
 export function normalizeSettings(input = {}) {
@@ -16,6 +17,7 @@ export function normalizeSettings(input = {}) {
     autoRefresh: input.autoRefresh === true,
     soundEnabled: input.soundEnabled !== false,
     notificationsEnabled: input.notificationsEnabled !== false
+    ,planPriority: Array.isArray(input.planPriority) ? input.planPriority.slice(0,20).map(({fingerprint,name,price})=>({fingerprint:String(fingerprint??""),name:String(name??"").slice(0,120),price:String(price??"").slice(0,80)})) : []
   };
 }
 

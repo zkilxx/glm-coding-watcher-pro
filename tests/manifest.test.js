@@ -21,6 +21,7 @@ test("runtime is mutation-driven and clears refresh before click", async () => {
   assert.match(content, /clearRefreshTimer\(\);\s*button\.click\(\)/);
   assert.match(content, /classifySuccess/);
   assert.doesNotMatch(background, /chrome\.alarms/);
+  assert.match(content,/DISCOVER_PLANS/);assert.match(content,/planPriority/);assert.match(background,/未选择目标套餐/);assert.match(background,/selectedPlan/);
 });
 
 test("manifest references local runtime files", async () => {

@@ -4,6 +4,9 @@
   const textOf = (node) => String(node?.innerText ?? node?.textContent ?? "").replace(/\s+/g, "").trim();
   const visible = (node) => { const s = getComputedStyle(node), r = node.getBoundingClientRect(); return s.display !== "none" && s.visibility !== "hidden" && Number(s.opacity) !== 0 && r.width > 0 && r.height > 0; };
   const purchaseLabel = (text) => [/^立即购买$/, /^购买(?:套餐|方案|计划)?$/, /^立即订阅$/, /^订阅(?:套餐|方案|计划)?$/].some((re) => re.test(text));
+  const compact=(v,max)=>String(v??"").replace(/\s+/g,"").trim().slice(0,max);
+  function discoverPlans(){return [...document.querySelectorAll('button,[role="button"],a')].filter((b)=>visible(b)&&purchaseLabel(textOf(b))).slice(0,20).map((button,pageIndex)=>{let card=button;for(let i=0;i<5&&card.parentElement;i++){card=card.parentElement;if(card.querySelector('h1,h2,h3,h4,[class*="title"],[class*="name"]'))break;}const heading=card.querySelector('h1,h2,h3,h4,[class*="title"],[class*="name"]');const raw=textOf(card);const price=(raw.match(/[¥￥]\s*\d+(?:\.\d+)?(?:\s*\/\s*(?:月|年))?/)||[""])[0];const name=compact(textOf(heading)||raw.replace(textOf(button),"").replace(price,"").slice(0,120),120);const p=compact(price,80);return{name,price:p,pageIndex,eligible:!button.disabled&&button.getAttribute("aria-disabled")!=="true"&&button.getAttribute("aria-busy")!=="true",button};}).filter((p)=>p.name);}
+  function chosenPlan(){for(const target of settings?.planPriority??[]){const match=discoverPlans().find((p)=>p.eligible&&p.name===compact(target.name,120)&&p.price===compact(target.price,80));if(match)return match;}return null;}
   const classifySuccess = () => /\/(order|checkout|payment)(\/|\?|$)/i.test(location.href) || /(订单创建成功|购买成功|支付二维码|确认订单|订单编号)/.test(textOf(document.body));
   const capacityDelay = () => [1,1,2,3,5,8][Math.min(capacityAttempts++,5)];
   const riskDelay = () => [30,60,120][Math.min(riskAttempts++,2)];
@@ -36,7 +39,7 @@
       const capacity = dismissCapacityNotice();
       const pageText = textOf(document.body);
       const risk = /(请求过于频繁|访问受限|风控|429)/.test(pageText);
-      const button = eligiblePurchaseButton();
+      const selected = chosenPlan(); const button = selected?.button;
       await chrome.runtime.sendMessage({ type:"CHECK_RECORDED", status:button ? "发现可用购买按钮" : "等待购买按钮可用" });
       if (!button) { scheduleRefresh(risk ? "risk" : capacity ? "capacity" : "ordinary"); return; }
       const claim = await chrome.runtime.sendMessage({ type:"CLAIM_CLICK" });
@@ -44,9 +47,9 @@
       clearRefreshTimer();
       button.click();
       run.clickClaimed = true;
-      publish({ clickClaimed:true,nextRefreshAt:null,backoffReason:"clicked",status:"已点击一次，等待手动完成后续步骤" });
+      publish({ clickClaimed:true,selectedPlan:{name:selected.name,price:selected.price},nextRefreshAt:null,backoffReason:"clicked",status:`已点击 ${selected.name}，等待手动完成后续步骤` });
       if (settings.soundEnabled) try { const a=new AudioContext(),o=a.createOscillator();o.connect(a.destination);o.frequency.value=880;o.start();o.stop(a.currentTime+.25); } catch {}
-      await chrome.runtime.sendMessage({ type:"CLICK_COMPLETED" });
+      await chrome.runtime.sendMessage({ type:"CLICK_COMPLETED",selectedPlan:{name:selected.name,price:selected.price} });
     } finally { inspecting = false; }
   }
   function applyState(nextRun, nextSettings) {
@@ -57,6 +60,6 @@
     if (settings.mode === "sprint") sprintTimer = setTimeout(() => { settings={...settings,mode:"balanced",scanMs:200,refreshSeconds:3}; publish({mode:"balanced",status:"冲刺结束，已恢复平衡模式"}); applyState(run,settings); },300000);
     inspect(); scheduleRefresh();
   }
-  chrome.runtime.onMessage.addListener((m) => { if (m.type === "MONITORING_STATE") applyState(m.run,m.settings); });
+  chrome.runtime.onMessage.addListener((m,sender,sendResponse) => { if (m.type === "MONITORING_STATE") applyState(m.run,m.settings); if(m.type === "DISCOVER_PLANS"){sendResponse({plans:discoverPlans().map(({button,...p})=>p)});} });
   chrome.runtime.sendMessage({type:"GET_STATE"}).then((s)=>applyState(s.run,s.settings)).catch(()=>{});
 })();

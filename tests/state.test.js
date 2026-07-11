@@ -16,6 +16,7 @@ test("settings use safe defaults", () => {
     refreshSeconds: 3,
     soundEnabled: true,
     notificationsEnabled: true
+    ,planPriority: []
   });
 });
 
@@ -27,6 +28,7 @@ test("settings normalize unsafe intervals and booleans", () => {
     refreshSeconds: 1,
     soundEnabled: true,
     notificationsEnabled: true
+    ,planPriority: []
   });
 });
 

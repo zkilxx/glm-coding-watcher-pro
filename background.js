@@ -22,13 +22,13 @@ async function saveRun(run) {
   await chrome.storage.local.set({ runs: { ...runs, [run.tabId]: run } });
 }
 
-async function alertUser(settings) {
+async function alertUser(settings, selectedPlan) {
   if (settings.notificationsEnabled) {
     await chrome.notifications.create({
       type: "basic",
       iconUrl: "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=",
       title: "GLM Coding 按钮已点击一次",
-      message: "请返回页面，手动完成验证和支付。"
+      message: `${selectedPlan?.name ? `已选择 ${selectedPlan.name}。` : ""}请返回页面，手动完成验证和支付。`
     });
   }
 }
@@ -49,6 +49,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       return { ok: true, settings };
     }
     if (message.type === "START_MONITORING") {
+      if (!store.settings.planPriority.length) return { ok:false,error:"未选择目标套餐" };
       for (const prior of Object.values(store.runs)) {
         if (prior.active && prior.tabId !== tabId) {
           const stopped = { ...prior, active: false, status: "已由其他标签页接管" };
@@ -84,11 +85,12 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       return { ok: true };
     }
     if (message.type === "ADD_LOG") { await log(message.message, message.level); return { ok: true }; }
+    if (message.type === "DISCOVER_PLANS") return chrome.tabs.sendMessage(tabId,{type:"DISCOVER_PLANS"});
     if (message.type === "CLICK_COMPLETED") {
-      const run = { ...(store.runs[tabId] ?? {}), active: false, clickClaimed: true, status: "已点击一次，请手动完成后续步骤" };
+      const run = { ...(store.runs[tabId] ?? {}), active: false, clickClaimed: true, selectedPlan:message.selectedPlan??null, status: "已点击一次，请手动完成后续步骤" };
       await saveRun(run);
-      await log(`标签页 ${tabId} 已单次点击购买按钮`);
-      await alertUser(store.settings);
+      await log(`标签页 ${tabId} 已单次点击套餐：${message.selectedPlan?.name??"未知"}`);
+      await alertUser(store.settings,message.selectedPlan);
       return { ok: true };
     }
     return { ok: false, error: "未知消息" };
