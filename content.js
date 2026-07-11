@@ -11,6 +11,7 @@
   function periodControls(){return periodLabels.map((label)=>({label,node:[...document.querySelectorAll('div,span,button,[role="button"]')].find((n)=>visible(n)&&textOf(n)===label)})).filter((x)=>x.node);}
   function selectedPeriod(){return periodControls().find(({node})=>node.getAttribute("aria-selected")==="true"||/active|selected|checked/i.test(node.className))??periodControls()[0];}
   function discoverPlans(billingPeriod=periodKey(selectedPeriod()?.label??"连续包季")){return [...document.querySelectorAll('button,[role="button"],a')].filter((b)=>visible(b)&&planStatusLabel(textOf(b))).slice(0,20).map((button,pageIndex)=>{let card=button,name="";for(let i=0;i<8&&card.parentElement;i++){card=card.parentElement;const exact=[...card.querySelectorAll('div,span,h1,h2,h3,h4')].map(textOf).find((t)=>/^(Lite|Pro|Max)$/.test(t));if(exact&&/[¥￥]\d/.test(textOf(card))){name=exact;break;}}const raw=textOf(card);const price=(raw.match(/[¥￥]\d+(?:\.\d+)?(?:\/(?:月|年))?/)||[""])[0];return{name,price:compact(price,80),billingPeriod,pageIndex,eligible:purchaseLabel(textOf(button))&&!button.disabled&&button.getAttribute("aria-disabled")!=="true"&&button.getAttribute("aria-busy")!=="true",button};}).filter((p)=>p.name);}
+  function plansReady(){return periodControls().length===periodLabels.length&&discoverPlans().length>0;}
   const signature=()=>discoverPlans().map((p)=>`${p.name}:${p.price}:${p.eligible}`).join("|");
   function waitForChange(before){return new Promise((resolve)=>{const started=Date.now(),tick=()=>{if(signature()!==before||Date.now()-started>=2000)resolve();else setTimeout(tick,50);};setTimeout(tick,50);});}
   async function discoverAllPeriods(){const controls=periodControls(),original=selectedPeriod(),plans=[],errors=[];for(const item of controls){try{const before=signature();item.node.click();await waitForChange(before);plans.push(...discoverPlans(periodKey(item.label)).map(({button,...p})=>p));}catch(error){errors.push(`${item.label}: ${error.message}`);}}const restore=original?.node;if(restore){restore.click();await waitForChange(signature());}const seen=new Set();return{plans:plans.filter((p)=>{const k=`${p.name}|${p.billingPeriod}|${p.price}`;if(seen.has(k))return false;seen.add(k);return true;}).slice(0,9),errors};}
@@ -40,6 +41,7 @@
     try {
       if (run.clickClaimed) { if (classifySuccess()) { clearRuntimeTimers(); publish({ active:false,status:"已进入订单或支付步骤" }); } return; }
       dismissCapacityNotice();
+      if(!plansReady()){publish({status:"等待套餐加载"});return;}
       let currentKey=periodKey(selectedPeriod()?.label??"连续包季");
       for (const target of settings.planPriority ?? []) {
         if (token!==cycleToken || !run?.active) return;
