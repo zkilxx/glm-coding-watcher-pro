@@ -45,3 +45,4 @@ test("popup and README explain success-oriented timing", async () => {
     assert.match(popup + readme, new RegExp(phrase.replace(" ", "\\s*")));
   }
 });
+test("popup keeps live monitoring status visible",async()=>{const popup=await readFile("popup.js","utf8");const background=await readFile("background.js","utf8");assert.match(popup,/setInterval\([^,]+,500\)/s);assert.match(popup,/监测运行中/);assert.match(background,/nextRefreshAt:\s*null/);});

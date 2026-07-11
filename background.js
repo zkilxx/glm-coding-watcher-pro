@@ -64,7 +64,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       return { ok: true, run };
     }
     if (message.type === "STOP_MONITORING") {
-      const run = { ...(store.runs[tabId] ?? {}), tabId, active: false, status: "已停止" };
+      const run = { ...(store.runs[tabId] ?? {}), tabId, active: false, status: "已停止", nextRefreshAt: null, backoffReason: null };
       await saveRun(run);
       await chrome.tabs.sendMessage(tabId, { type: "MONITORING_STATE", run, settings: store.settings }).catch(() => {});
       return { ok: true, run };
