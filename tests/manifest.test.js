@@ -23,6 +23,7 @@ test("runtime is mutation-driven and clears refresh before click", async () => {
   assert.doesNotMatch(background, /chrome\.alarms/);
   assert.match(content,/DISCOVER_PLANS/);assert.match(content,/planPriority/);assert.match(background,/未选择目标套餐/);assert.match(background,/selectedPlan/);
   assert.match(content,/特惠订阅/);assert.match(content,/暂时售罄/);assert.match(content,/Lite\|Pro\|Max/);
+  for(const label of["连续包月","连续包季","连续包年"])assert.match(content,new RegExp(label));assert.match(content,/2000/);assert.match(content,/restore/);
 });
 
 test("manifest references local runtime files", async () => {

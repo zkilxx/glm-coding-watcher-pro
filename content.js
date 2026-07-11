@@ -6,7 +6,14 @@
   const purchaseLabel = (text) => [/^立即购买$/, /^购买(?:套餐|方案|计划)?$/, /^立即订阅$/, /^订阅(?:套餐|方案|计划)?$/, /^特惠订阅$/].some((re) => re.test(text));
   const planStatusLabel = (text) => purchaseLabel(text) || /^(暂时售罄|售罄)/.test(text);
   const compact=(v,max)=>String(v??"").replace(/\s+/g,"").trim().slice(0,max);
-  function discoverPlans(){return [...document.querySelectorAll('button,[role="button"],a')].filter((b)=>visible(b)&&planStatusLabel(textOf(b))).slice(0,20).map((button,pageIndex)=>{let card=button,name="";for(let i=0;i<8&&card.parentElement;i++){card=card.parentElement;const exact=[...card.querySelectorAll('div,span,h1,h2,h3,h4')].map(textOf).find((t)=>/^(Lite|Pro|Max)$/.test(t));if(exact&&/[¥￥]\d/.test(textOf(card))){name=exact;break;}}const raw=textOf(card);const price=(raw.match(/[¥￥]\d+(?:\.\d+)?(?:\/(?:月|年))?/)||[""])[0];return{name,price:compact(price,80),pageIndex,eligible:purchaseLabel(textOf(button))&&!button.disabled&&button.getAttribute("aria-disabled")!=="true"&&button.getAttribute("aria-busy")!=="true",button};}).filter((p)=>p.name);}
+  const periodKey=(label)=>label.includes("月")?"monthly":label.includes("季")?"quarterly":"annual";
+  const periodLabels=["连续包月","连续包季","连续包年"];
+  function periodControls(){return periodLabels.map((label)=>({label,node:[...document.querySelectorAll('div,span,button,[role="button"]')].find((n)=>visible(n)&&textOf(n)===label)})).filter((x)=>x.node);}
+  function selectedPeriod(){return periodControls().find(({node})=>node.getAttribute("aria-selected")==="true"||/active|selected|checked/i.test(node.className))??periodControls()[0];}
+  function discoverPlans(billingPeriod=periodKey(selectedPeriod()?.label??"连续包季")){return [...document.querySelectorAll('button,[role="button"],a')].filter((b)=>visible(b)&&planStatusLabel(textOf(b))).slice(0,20).map((button,pageIndex)=>{let card=button,name="";for(let i=0;i<8&&card.parentElement;i++){card=card.parentElement;const exact=[...card.querySelectorAll('div,span,h1,h2,h3,h4')].map(textOf).find((t)=>/^(Lite|Pro|Max)$/.test(t));if(exact&&/[¥￥]\d/.test(textOf(card))){name=exact;break;}}const raw=textOf(card);const price=(raw.match(/[¥￥]\d+(?:\.\d+)?(?:\/(?:月|年))?/)||[""])[0];return{name,price:compact(price,80),billingPeriod,pageIndex,eligible:purchaseLabel(textOf(button))&&!button.disabled&&button.getAttribute("aria-disabled")!=="true"&&button.getAttribute("aria-busy")!=="true",button};}).filter((p)=>p.name);}
+  const signature=()=>discoverPlans().map((p)=>`${p.name}:${p.price}:${p.eligible}`).join("|");
+  function waitForChange(before){return new Promise((resolve)=>{const started=Date.now(),tick=()=>{if(signature()!==before||Date.now()-started>=2000)resolve();else setTimeout(tick,50);};setTimeout(tick,50);});}
+  async function discoverAllPeriods(){const controls=periodControls(),original=selectedPeriod(),plans=[],errors=[];for(const item of controls){try{const before=signature();item.node.click();await waitForChange(before);plans.push(...discoverPlans(periodKey(item.label)).map(({button,...p})=>p));}catch(error){errors.push(`${item.label}: ${error.message}`);}}const restore=original?.node;if(restore){restore.click();await waitForChange(signature());}const seen=new Set();return{plans:plans.filter((p)=>{const k=`${p.name}|${p.billingPeriod}|${p.price}`;if(seen.has(k))return false;seen.add(k);return true;}).slice(0,9),errors};}
   function chosenPlan(){for(const target of settings?.planPriority??[]){const match=discoverPlans().find((p)=>p.eligible&&p.name===compact(target.name,120)&&p.price===compact(target.price,80));if(match)return match;}return null;}
   const classifySuccess = () => /\/(order|checkout|payment)(\/|\?|$)/i.test(location.href) || /(订单创建成功|购买成功|支付二维码|确认订单|订单编号)/.test(textOf(document.body));
   const capacityDelay = () => [1,1,2,3,5,8][Math.min(capacityAttempts++,5)];
@@ -61,6 +68,6 @@
     if (settings.mode === "sprint") sprintTimer = setTimeout(() => { settings={...settings,mode:"balanced",scanMs:200,refreshSeconds:3}; publish({mode:"balanced",status:"冲刺结束，已恢复平衡模式"}); applyState(run,settings); },300000);
     inspect(); scheduleRefresh();
   }
-  chrome.runtime.onMessage.addListener((m,sender,sendResponse) => { if (m.type === "MONITORING_STATE") applyState(m.run,m.settings); if(m.type === "DISCOVER_PLANS"){sendResponse({plans:discoverPlans().map(({button,...p})=>p)});} });
+  chrome.runtime.onMessage.addListener((m,sender,sendResponse) => { if (m.type === "MONITORING_STATE") applyState(m.run,m.settings); if(m.type === "DISCOVER_PLANS"){discoverAllPeriods().then(sendResponse);return true;} });
   chrome.runtime.sendMessage({type:"GET_STATE"}).then((s)=>applyState(s.run,s.settings)).catch(()=>{});
 })();
