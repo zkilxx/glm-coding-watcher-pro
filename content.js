@@ -1,6 +1,6 @@
 (() => {
   let run = null, settings = null, scanTimer = null, refreshTimer = null, sprintTimer = null, observer = null;
-  let capacityAttempts = 0, riskAttempts = 0, inspecting = false;
+  let capacityAttempts = 0, riskAttempts = 0, inspecting = false, cycleToken = 0;
   const textOf = (node) => String(node?.innerText ?? node?.textContent ?? "").replace(/\s+/g, "").trim();
   const visible = (node) => { const s = getComputedStyle(node), r = node.getBoundingClientRect(); return s.display !== "none" && s.visibility !== "hidden" && Number(s.opacity) !== 0 && r.width > 0 && r.height > 0; };
   const purchaseLabel = (text) => [/^立即购买$/, /^购买(?:套餐|方案|计划)?$/, /^立即订阅$/, /^订阅(?:套餐|方案|计划)?$/, /^特惠订阅$/].some((re) => re.test(text));
@@ -21,7 +21,7 @@
   const ordinaryDelay = () => settings.mode === "sprint" ? settings.refreshSeconds : Math.round(settings.refreshSeconds * (0.9 + Math.random() * 0.2) * 10) / 10;
 
   function clearRefreshTimer() { if (refreshTimer) clearTimeout(refreshTimer); refreshTimer = null; }
-  function clearRuntimeTimers() { if (scanTimer) clearInterval(scanTimer); if (sprintTimer) clearTimeout(sprintTimer); clearRefreshTimer(); observer?.disconnect(); scanTimer = sprintTimer = observer = null; }
+  function clearRuntimeTimers() { cycleToken += 1; if (scanTimer) clearInterval(scanTimer); if (sprintTimer) clearTimeout(sprintTimer); clearRefreshTimer(); observer?.disconnect(); scanTimer = sprintTimer = observer = null; }
   function publish(patch) { chrome.runtime.sendMessage({ type: "RUNTIME_STATUS", patch }).catch(() => {}); }
   function scheduleRefresh(reason = "ordinary") {
     clearRefreshTimer();
@@ -42,22 +42,31 @@
   }
   async function inspect() {
     if (inspecting || !run?.active) return; inspecting = true;
+    const token = cycleToken;
     try {
       if (run.clickClaimed) { if (classifySuccess()) { clearRuntimeTimers(); publish({ active:false,status:"已进入订单或支付步骤" }); } return; }
       const capacity = dismissCapacityNotice();
       const pageText = textOf(document.body);
       const risk = /(请求过于频繁|访问受限|风控|429)/.test(pageText);
-      const selected = chosenPlan(); const button = selected?.button;
-      await chrome.runtime.sendMessage({ type:"CHECK_RECORDED", status:button ? "发现可用购买按钮" : "等待购买按钮可用" });
-      if (!button) { scheduleRefresh(risk ? "risk" : capacity ? "capacity" : "ordinary"); return; }
-      const claim = await chrome.runtime.sendMessage({ type:"CLAIM_CLICK" });
-      if (!claim?.claimed) return clearRuntimeTimers();
-      clearRefreshTimer();
-      button.click();
-      run.clickClaimed = true;
-      publish({ clickClaimed:true,selectedPlan:{name:selected.name,price:selected.price},nextRefreshAt:null,backoffReason:"clicked",status:`已点击 ${selected.name}，等待手动完成后续步骤` });
-      if (settings.soundEnabled) try { const a=new AudioContext(),o=a.createOscillator();o.connect(a.destination);o.frequency.value=880;o.start();o.stop(a.currentTime+.25); } catch {}
-      await chrome.runtime.sendMessage({ type:"CLICK_COMPLETED",selectedPlan:{name:selected.name,price:selected.price} });
+      let currentKey=periodKey(selectedPeriod()?.label??"连续包季");
+      for (const target of settings.planPriority ?? []) {
+        if (token!==cycleToken || !run?.active) return;
+        if (target.billingPeriod && target.billingPeriod!==currentKey) {
+          const control=periodControls().find((item)=>periodKey(item.label)===target.billingPeriod);
+          if (!control) continue;
+          const before=signature();control.node.click();await waitForChange(before);currentKey=target.billingPeriod;
+        }
+        publish({status:`检查 ${target.name}（${target.billingPeriod||"当前周期"}）`});
+        const selected=discoverPlans(currentKey).find((p)=>p.name===compact(target.name,120)&&p.price===compact(target.price,80));
+        await chrome.runtime.sendMessage({type:"CHECK_RECORDED",status:selected?.eligible?"发现可用购买按钮":`等待 ${target.name} 可用`});
+        if (!selected?.eligible) continue;
+        const claim=await chrome.runtime.sendMessage({type:"CLAIM_CLICK"});if(!claim?.claimed)return clearRuntimeTimers();
+        clearRefreshTimer();selected.button.click();run.clickClaimed=true;
+        publish({clickClaimed:true,selectedPlan:{name:selected.name,price:selected.price,billingPeriod:currentKey},nextRefreshAt:null,backoffReason:"clicked",status:`已点击 ${selected.name}，等待手动完成后续步骤`});
+        if(settings.soundEnabled)try{const a=new AudioContext(),o=a.createOscillator();o.connect(a.destination);o.frequency.value=880;o.start();o.stop(a.currentTime+.25);}catch{}
+        await chrome.runtime.sendMessage({type:"CLICK_COMPLETED",selectedPlan:{name:selected.name,price:selected.price,billingPeriod:currentKey}});return;
+      }
+      if (token===cycleToken) scheduleRefresh(risk ? "risk" : capacity ? "capacity" : "ordinary");
     } finally { inspecting = false; }
   }
   function applyState(nextRun, nextSettings) {

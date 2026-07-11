@@ -18,7 +18,7 @@ test("runtime is mutation-driven and clears refresh before click", async () => {
   const background = await readFile("background.js", "utf8");
   assert.match(content, /new MutationObserver/);
   assert.match(content, /function clearRuntimeTimers/);
-  assert.match(content, /clearRefreshTimer\(\);\s*button\.click\(\)/);
+  assert.match(content, /clearRefreshTimer\(\);\s*selected\.button\.click\(\)/);
   assert.match(content, /classifySuccess/);
   assert.doesNotMatch(background, /chrome\.alarms/);
   assert.match(content,/DISCOVER_PLANS/);assert.match(content,/planPriority/);assert.match(background,/未选择目标套餐/);assert.match(background,/selectedPlan/);
