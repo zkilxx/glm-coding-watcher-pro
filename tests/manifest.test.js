@@ -34,3 +34,11 @@ test("repository documents installation and safety boundaries", async () => {
   const readme = await readFile("README.md", "utf8");
   for (const phrase of ["验证码", "登录", "限流", "风控", "支付确认", "Download ZIP"]) assert.match(readme, new RegExp(phrase));
 });
+
+test("popup and README explain success-oriented timing", async () => {
+  const popup = await readFile("popup.html", "utf8");
+  const readme = await readFile("README.md", "utf8");
+  for (const phrase of ["稳健", "平衡", "冲刺", "100", "1 秒", "5 分钟", "点击后立即停止刷新"]) {
+    assert.match(popup + readme, new RegExp(phrase.replace(" ", "\\s*")));
+  }
+});
