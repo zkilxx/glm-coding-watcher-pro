@@ -1,18 +1,19 @@
-import { clampDetectionSeconds, clampRefreshSeconds } from "./rules.js";
+import { normalizeTimingSettings } from "./rules.js";
 
 export const DEFAULT_SETTINGS = Object.freeze({
-  detectionSeconds: 5,
+  mode: "balanced",
+  scanMs: 200,
   autoRefresh: false,
-  refreshSeconds: 60,
+  refreshSeconds: 3,
   soundEnabled: true,
   notificationsEnabled: true
 });
 
 export function normalizeSettings(input = {}) {
+  const timing = normalizeTimingSettings(input);
   return {
-    detectionSeconds: clampDetectionSeconds(input.detectionSeconds ?? DEFAULT_SETTINGS.detectionSeconds),
+    ...timing,
     autoRefresh: input.autoRefresh === true,
-    refreshSeconds: clampRefreshSeconds(input.refreshSeconds ?? DEFAULT_SETTINGS.refreshSeconds),
     soundEnabled: input.soundEnabled !== false,
     notificationsEnabled: input.notificationsEnabled !== false
   };
@@ -24,6 +25,8 @@ export function createRunState(tabId, now = Date.now()) {
     runId: `${tabId}-${now}`,
     active: true,
     clickClaimed: false,
+    mode: "balanced",
+    startedAt: now,
     checks: 0,
     lastCheckAt: null,
     status: "监测中"

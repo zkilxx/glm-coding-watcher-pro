@@ -35,3 +35,35 @@ export function isEligibleButton(snapshot) {
     isPurchaseLabel(snapshot?.text)
   );
 }
+
+export const TIMING_MODES = Object.freeze({
+  stable: Object.freeze({ scanMs: 500, refreshSeconds: 10 }),
+  balanced: Object.freeze({ scanMs: 200, refreshSeconds: 3 }),
+  sprint: Object.freeze({ scanMs: 100, refreshSeconds: 1 })
+});
+
+export function normalizeTimingSettings(input = {}) {
+  const mode = ["stable", "balanced", "sprint", "custom"].includes(input.mode) ? input.mode : "balanced";
+  const preset = TIMING_MODES[mode] ?? input;
+  const scanMs = Math.max(100, Number.isFinite(Number(input.scanMs ?? preset.scanMs)) ? Number(input.scanMs ?? preset.scanMs) : 200);
+  const refreshSeconds = Math.max(1, Number.isFinite(Number(input.refreshSeconds ?? preset.refreshSeconds)) ? Number(input.refreshSeconds ?? preset.refreshSeconds) : 3);
+  return { mode, scanMs, refreshSeconds };
+}
+
+export function nextBackoffSeconds(reason, attempt = 0, base = 3, random = Math.random) {
+  if (reason === "capacity") return [1, 1, 2, 3, 5, 8][Math.min(attempt, 5)];
+  if (reason === "risk") return [30, 60, 120][Math.min(attempt, 2)];
+  if (reason === "sprint") return Math.max(1, base);
+  return Math.round(Math.max(1, base * (0.9 + random() * 0.2)) * 10) / 10;
+}
+
+export function isSprintExpired(run, now = Date.now()) {
+  return run?.mode === "sprint" && now - Number(run.startedAt ?? now) >= 300000;
+}
+
+export function classifySuccessSignal({ url = "", text = "" } = {}) {
+  if (/\/(?:order|checkout|payment)(?:\/|\?|$)/i.test(url)) return "route";
+  const normalized = normalizeText(text);
+  if (/(订单创建成功|购买成功|支付二维码|确认订单|订单编号)/.test(normalized)) return "content";
+  return null;
+}

@@ -10,19 +10,21 @@ import {
 
 test("settings use safe defaults", () => {
   assert.deepEqual(DEFAULT_SETTINGS, {
-    detectionSeconds: 5,
+    mode: "balanced",
+    scanMs: 200,
     autoRefresh: false,
-    refreshSeconds: 60,
+    refreshSeconds: 3,
     soundEnabled: true,
     notificationsEnabled: true
   });
 });
 
 test("settings normalize unsafe intervals and booleans", () => {
-  assert.deepEqual(normalizeSettings({ detectionSeconds: 1, autoRefresh: true, refreshSeconds: 2 }), {
-    detectionSeconds: 3,
+  assert.deepEqual(normalizeSettings({ mode: "custom", scanMs: 10, autoRefresh: true, refreshSeconds: 0 }), {
+    mode: "custom",
+    scanMs: 100,
     autoRefresh: true,
-    refreshSeconds: 30,
+    refreshSeconds: 1,
     soundEnabled: true,
     notificationsEnabled: true
   });
