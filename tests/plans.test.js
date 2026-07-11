@@ -1,7 +1,10 @@
 import test from "node:test";import assert from "node:assert/strict";
-import {normalizePlan,fingerprintPlan,matchTarget,movePriority,chooseEligibleTarget} from "../src/plans.js";
+import {normalizePlan,fingerprintPlan,matchTarget,movePriority,chooseEligibleTarget,normalizeBillingPeriod,dedupePlanVariants} from "../src/plans.js";
 test("plan summaries are normalized and bounded",()=>{const p=normalizePlan({name:"  Pro  套餐 ",price:" ¥ 99 / 月 ",pageIndex:2});assert.equal(p.name,"Pro套餐");assert.equal(p.price,"¥99/月");assert.equal(p.pageIndex,2);assert.equal(normalizePlan({name:"x".repeat(200),price:"y".repeat(100)}).name.length,120);});
 test("fingerprints distinguish duplicate names by price and order",()=>{assert.notEqual(fingerprintPlan({name:"Pro",price:"99",pageIndex:0}),fingerprintPlan({name:"Pro",price:"199",pageIndex:1}));});
 test("target matching is exact after normalization",()=>{assert.equal(matchTarget({name:"Pro 套餐",price:"¥99/月"},{name:"Pro套餐",price:"¥99/月"}),true);assert.equal(matchTarget({name:"Pro套餐",price:"¥99/月"},{name:"Pro套餐",price:"¥199/月"}),false);});
 test("priority entries move without loss",()=>{assert.deepEqual(movePriority(["a","b","c"],2,-1),["a","c","b"]);assert.deepEqual(movePriority(["a","b"],0,-1),["a","b"]);});
 test("highest-priority eligible selected plan wins",()=>{const targets=[{name:"A",price:"1"},{name:"B",price:"2"}];const plans=[{name:"A",price:"1",eligible:false},{name:"B",price:"2",eligible:true}];assert.equal(chooseEligibleTarget(targets,plans).name,"B");assert.equal(chooseEligibleTarget([{name:"X",price:"1"}],plans),null);});
+test("billing periods normalize to stable keys",()=>{assert.equal(normalizeBillingPeriod("连续包月"),"monthly");assert.equal(normalizeBillingPeriod("连续包季"),"quarterly");assert.equal(normalizeBillingPeriod("连续包年"),"annual");});
+test("same plan in different periods never matches",()=>{assert.equal(matchTarget({name:"Lite",price:"￥49/月",billingPeriod:"monthly"},{name:"Lite",price:"￥49/月",billingPeriod:"annual"}),false);});
+test("variant dedupe preserves periods",()=>{assert.equal(dedupePlanVariants([{name:"Lite",price:"49",billingPeriod:"monthly"},{name:"Lite",price:"49",billingPeriod:"monthly"},{name:"Lite",price:"49",billingPeriod:"annual"}]).length,2);});
