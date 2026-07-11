@@ -1,5 +1,5 @@
 const CAPACITY_PHRASE = "购买人数过多";
-const PURCHASE_LABELS = [/^立即购买$/, /^购买(?:套餐|方案|计划)?$/, /^立即订阅$/, /^订阅(?:套餐|方案|计划)?$/];
+const PURCHASE_LABELS = [/^立即购买$/, /^购买(?:套餐|方案|计划)?$/, /^立即订阅$/, /^订阅(?:套餐|方案|计划)?$/, /^特惠订阅$/];
 
 function normalizeText(value) {
   return String(value ?? "").replace(/\s+/g, "").trim();

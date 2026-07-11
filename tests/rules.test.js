@@ -30,6 +30,8 @@ test("purchase labels are conservative", () => {
   assert.equal(isPurchaseLabel("立即购买"), true);
   assert.equal(isPurchaseLabel("购买套餐"), true);
   assert.equal(isPurchaseLabel("立即订阅"), true);
+  assert.equal(isPurchaseLabel("特惠订阅"), true);
+  assert.equal(isPurchaseLabel("即刻订阅"), false);
   assert.equal(isPurchaseLabel("确认支付"), false);
   assert.equal(isPurchaseLabel("登录"), false);
 });
