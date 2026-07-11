@@ -25,9 +25,9 @@
   function publish(patch) { chrome.runtime.sendMessage({ type: "RUNTIME_STATUS", patch }).catch(() => {}); }
   function scheduleRefresh(reason = "ordinary") {
     clearRefreshTimer();
-    if (!run?.active || run.clickClaimed || !settings?.autoRefresh) return;
+    if (!run?.active || run.clickClaimed) return;
     const seconds = reason === "capacity" ? capacityDelay() : reason === "risk" ? riskDelay() : ordinaryDelay();
-    publish({ nextRefreshAt: Date.now() + seconds * 1000, backoffReason: reason });
+    publish({ nextRefreshAt: Date.now() + seconds * 1000, backoffReason: reason, status: "等待页面刷新" });
     refreshTimer = setTimeout(() => { if (run?.active && !run.clickClaimed) location.reload(); }, seconds * 1000);
   }
   function dismissCapacityNotice() {
@@ -75,7 +75,7 @@
     observer = new MutationObserver(() => queueMicrotask(inspect)); observer.observe(document.documentElement,{subtree:true,childList:true,attributes:true,attributeFilter:["disabled","aria-disabled","class"]});
     scanTimer = setInterval(inspect, Math.max(100, settings.scanMs));
     if (settings.mode === "sprint") sprintTimer = setTimeout(() => { settings={...settings,mode:"balanced",scanMs:200,refreshSeconds:3}; publish({mode:"balanced",status:"冲刺结束，已恢复平衡模式"}); applyState(run,settings); },300000);
-    inspect(); scheduleRefresh();
+    inspect();
   }
   chrome.runtime.onMessage.addListener((m,sender,sendResponse) => { if (m.type === "MONITORING_STATE") applyState(m.run,m.settings); if(m.type === "DISCOVER_PLANS"){discoverAllPeriods().then(sendResponse);return true;} });
   chrome.runtime.sendMessage({type:"GET_STATE"}).then((s)=>applyState(s.run,s.settings)).catch(()=>{});

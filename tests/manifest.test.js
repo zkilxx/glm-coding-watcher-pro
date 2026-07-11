@@ -46,3 +46,4 @@ test("popup and README explain success-oriented timing", async () => {
   }
 });
 test("popup keeps live status without redrawing priority editing",async()=>{const popup=await readFile("popup.js","utf8");const background=await readFile("background.js","utf8");assert.match(popup,/function renderRuntime/);assert.match(popup,/setInterval\(.*refreshRuntime.*500\)/s);assert.match(popup,/监测运行中/);assert.match(background,/nextRefreshAt:\s*null/);});
+test("active monitoring always schedules page refresh",async()=>{const content=await readFile("content.js","utf8");const html=await readFile("popup.html","utf8");assert.doesNotMatch(content,/settings\?\.autoRefresh/);assert.doesNotMatch(html,/id="autoRefresh"/);assert.match(html,/页面刷新间隔/);assert.match(content,/location\.reload\(\)/);});
