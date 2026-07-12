@@ -34,13 +34,7 @@
     await chrome.runtime.sendMessage({type:"REFRESH_RECORDED"});
     location.reload();
   }
-  function dismissCapacityNotice() {
-    const dialog = [...document.querySelectorAll('[role="dialog"],.ant-modal,.el-dialog,[aria-modal="true"]')].find((n) => visible(n) && textOf(n).includes("购买人数过多"));
-    if (!dialog) return false;
-    const close = [...dialog.querySelectorAll('button,[role="button"],[aria-label]')].find((n) => visible(n) && /^(关闭|取消|确定|知道了|×)$/.test(textOf(n) || n.getAttribute("aria-label") || ""));
-    if (close) close.click();
-    return true;
-  }
+  function capacityVisible(){return /(?:抢购|购买)人数过多(?:，?请刷新再试)?/.test(textOf(document.body));}
   function eligiblePurchaseButton() {
     return [...document.querySelectorAll('button,[role="button"],a')].find((n) => visible(n) && !n.disabled && n.getAttribute("aria-disabled") !== "true" && n.getAttribute("aria-busy") !== "true" && !/loading|加载中/i.test(n.className) && purchaseLabel(textOf(n)));
   }
@@ -49,8 +43,8 @@
     const token = cycleToken;
     try {
       if (run.clickClaimed) { if (classifySuccess()) { clearRuntimeTimers(); publish({ active:false,status:"已进入订单或支付步骤" }); } return; }
-      dismissCapacityNotice();
-      if(!plansReady()){publish({status:"等待套餐加载"});return;}
+      const capacity=capacityVisible();
+      if(!plansReady()){if(capacity)return reloadImmediately();publish({status:"等待套餐加载"});return;}
       let currentKey=periodKey(selectedPeriod()?.label??"连续包季");
       for (const target of settings.planPriority ?? []) {
         if (token!==cycleToken || !run?.active) return;
