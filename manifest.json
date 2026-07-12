@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "GLM Coding 抢购监测助手 Pro",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "低频监测 GLM Coding 页面；按钮可用时仅点击一次，后续步骤需手动完成。",
   "permissions": ["storage", "notifications", "tabs", "scripting"],
   "host_permissions": ["https://bigmodel.cn/glm-coding*"],

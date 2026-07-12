@@ -19,22 +19,24 @@
   const classifySuccess = () => /\/(order|checkout|payment)(\/|\?|$)/i.test(location.href) || /(订单创建成功|购买成功|支付二维码|确认订单|订单编号)/.test(textOf(document.body));
   function clearRefreshTimer() {}
   function clearRuntimeTimers() { cycleToken += 1; if (scanTimer) clearInterval(scanTimer); if (sprintTimer) clearTimeout(sprintTimer); observer?.disconnect(); scanTimer = sprintTimer = observer = null; }
-  function publish(patch) { chrome.runtime.sendMessage({ type: "RUNTIME_STATUS", patch }).catch(() => {}); }
+  function publish(patch) { run={...run,...patch};updateMonitorControl(run.status);chrome.runtime.sendMessage({ type: "RUNTIME_STATUS", patch }).catch(() => {}); }
   function removeMonitorControl(){document.getElementById("glm-watcher-control")?.remove();}
+  function updateMonitorControl(status=run?.status??"检查套餐中"){const host=document.getElementById("glm-watcher-control");const node=host?.shadowRoot?.querySelector("[data-status]");if(node)node.textContent=status;}
   function mountMonitorControl(){
     if(document.getElementById("glm-watcher-control"))return;
     const host=document.createElement("div");host.id="glm-watcher-control";const root=host.attachShadow({mode:"open"});
-    root.innerHTML=`<style>:host{all:initial;position:fixed;right:20px;top:20px;z-index:2147483647;font-family:Inter,"PingFang SC","Microsoft YaHei",sans-serif}.card{width:210px;padding:14px;border:1px solid rgba(37,99,235,.2);border-radius:14px;background:rgba(255,255,255,.97);box-shadow:0 12px 34px rgba(16,24,40,.2);color:#172033}.title{display:flex;align-items:center;gap:9px;font-size:13px;font-weight:750}.dot{width:8px;height:8px;border-radius:50%;background:#16a36a;box-shadow:0 0 0 3px #dff6eb}.metrics{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:13px 0}.metric{color:#667085;font-size:11px}.metric b{display:block;margin-top:3px;color:#172033;font-size:18px;font-variant-numeric:tabular-nums}button{width:100%;height:34px;border:0;border-radius:8px;background:#dc2626;color:#fff;font:700 12px Inter,"PingFang SC",sans-serif;cursor:pointer}button:hover{background:#b91c1c}button:disabled{cursor:wait;opacity:.65}button:focus-visible{outline:2px solid #93c5fd;outline-offset:2px}</style><div class="card" role="status"><div class="title"><span class="dot"></span>GLM 监测运行中</div><div class="metrics"><span class="metric">刷新次数<b>${run?.refreshCount??0}</b></span><span class="metric">检测间隔<b>${settings?.scanMs??200}ms</b></span></div><button type="button">停止监测</button></div>`;
+    root.innerHTML=`<style>:host{all:initial;position:fixed;right:20px;top:20px;z-index:2147483647;font-family:Inter,"PingFang SC","Microsoft YaHei",sans-serif}.card{width:230px;padding:14px;border:1px solid rgba(37,99,235,.2);border-radius:14px;background:rgba(255,255,255,.97);box-shadow:0 12px 34px rgba(16,24,40,.2);color:#172033}.title{display:flex;align-items:center;gap:9px;font-size:13px;font-weight:750}.dot{width:8px;height:8px;border-radius:50%;background:#16a36a;box-shadow:0 0 0 3px #dff6eb}.status{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:12px;padding:9px 10px;border-radius:9px;background:#eff6ff;color:#667085;font-size:11px}.status b{color:#1d4ed8;font-size:12px;text-align:right}.metrics{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:12px 0}.metric{color:#667085;font-size:11px}.metric b{display:block;margin-top:3px;color:#172033;font-size:18px;font-variant-numeric:tabular-nums}button{width:100%;height:34px;border:0;border-radius:8px;background:#dc2626;color:#fff;font:700 12px Inter,"PingFang SC",sans-serif;cursor:pointer}button:hover{background:#b91c1c}button:disabled{cursor:wait;opacity:.65}button:focus-visible{outline:2px solid #93c5fd;outline-offset:2px}</style><div class="card" role="status"><div class="title"><span class="dot"></span>GLM 监测运行中</div><div class="status"><span>当前状态</span><b data-status>${run?.status??"检查套餐中"}</b></div><div class="metrics"><span class="metric">刷新次数<b>${run?.refreshCount??0}</b></span><span class="metric">检测间隔<b>${settings?.scanMs??200}ms</b></span></div><button type="button">停止监测</button></div>`;
     const button=root.querySelector("button");button.addEventListener("click",async()=>{if(button.disabled)return;button.disabled=true;button.textContent="正在停止…";try{const result=await chrome.runtime.sendMessage({type:"STOP_MONITORING"});if(!result?.ok)throw new Error(result?.error||"停止失败");removeMonitorControl();}catch{button.disabled=false;button.textContent="重试停止";}});
     document.documentElement.append(host);
   }
-  async function reloadImmediately() {
+  async function reloadImmediately(status=pageAvailabilityStatus()) {
     if (!run?.active || run.clickClaimed) return;
-    publish({ nextRefreshAt: null, backoffReason: "unavailable", status: "不可购买，立即刷新" });
+    publish({ nextRefreshAt: null, backoffReason: "unavailable", status });
     await chrome.runtime.sendMessage({type:"REFRESH_RECORDED"});
     location.reload();
   }
   function capacityVisible(){return /(?:抢购|购买)人数过多(?:，?请刷新再试)?/.test(textOf(document.body));}
+  function pageAvailabilityStatus(){if(capacityVisible())return "抢购人数过多";if(discoverPlans().some((p)=>/^(暂时售罄|售罄)/.test(textOf(p.button))))return "暂时售罄";return "检查套餐中";}
   function eligiblePurchaseButton() {
     return [...document.querySelectorAll('button,[role="button"],a')].find((n) => visible(n) && !n.disabled && n.getAttribute("aria-disabled") !== "true" && n.getAttribute("aria-busy") !== "true" && !/loading|加载中/i.test(n.className) && purchaseLabel(textOf(n)));
   }
@@ -45,6 +47,7 @@
       if (run.clickClaimed) { if (classifySuccess()) { clearRuntimeTimers(); publish({ active:false,status:"已进入订单或支付步骤" }); } return; }
       const capacity=capacityVisible();
       if(!plansReady()){if(capacity)return reloadImmediately();publish({status:"等待套餐加载"});return;}
+      const availabilityStatus=pageAvailabilityStatus();publish({status:pageAvailabilityStatus()});
       let currentKey=periodKey(selectedPeriod()?.label??"连续包季");
       for (const target of settings.planPriority ?? []) {
         if (token!==cycleToken || !run?.active) return;
@@ -53,13 +56,13 @@
           if (!control) continue;
           const before=signature();control.node.click();await waitForChange(before);currentKey=target.billingPeriod;
         }
-        publish({status:`检查 ${target.name}（${target.billingPeriod||"当前周期"}）`});
         const selected=discoverPlans(currentKey).find((p)=>p.name===compact(target.name,120)&&p.price===compact(target.price,80));
-        await chrome.runtime.sendMessage({type:"CHECK_RECORDED",status:selected?.eligible?"发现可用购买按钮":`等待 ${target.name} 可用`});
+        await chrome.runtime.sendMessage({type:"CHECK_RECORDED",status:selected?.eligible?"发现可购买套餐":availabilityStatus});
         if (!selected?.eligible) continue;
+        publish({status:"发现可购买套餐"});
         const claim=await chrome.runtime.sendMessage({type:"CLAIM_CLICK"});if(!claim?.claimed)return clearRuntimeTimers();
-        clearRefreshTimer();removeMonitorControl();selected.button.click();run.clickClaimed=true;
-        publish({clickClaimed:true,selectedPlan:{name:selected.name,price:selected.price,billingPeriod:currentKey},nextRefreshAt:null,backoffReason:"clicked",status:`已点击 ${selected.name}，等待手动完成后续步骤`});
+        clearRefreshTimer();selected.button.click();run.clickClaimed=true;
+        publish({clickClaimed:true,selectedPlan:{name:selected.name,price:selected.price,billingPeriod:currentKey},nextRefreshAt:null,backoffReason:"clicked",status:"已自动点击，刷新已停止"});
         if(settings.soundEnabled)try{const a=new AudioContext(),o=a.createOscillator();o.connect(a.destination);o.frequency.value=880;o.start();o.stop(a.currentTime+.25);}catch{}
         await chrome.runtime.sendMessage({type:"CLICK_COMPLETED",selectedPlan:{name:selected.name,price:selected.price,billingPeriod:currentKey}});return;
       }
