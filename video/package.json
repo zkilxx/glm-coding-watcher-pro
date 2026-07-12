@@ -1,0 +1,1 @@
+{"scripts":{"render":"remotion render src/index.ts Demo ../dist/glm-coding-watcher-demo.mp4 --codec=h264","still":"remotion still src/index.ts Demo"},"dependencies":{"@remotion/media":"4.0.369","@remotion/captions":"4.0.369","@remotion/cli":"4.0.369","remotion":"4.0.369","react":"19.1.1","react-dom":"19.1.1"},"devDependencies":{"typescript":"5.9.2"}}
