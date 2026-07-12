@@ -4,7 +4,7 @@
   const textOf = (node) => String(node?.innerText ?? node?.textContent ?? "").replace(/\s+/g, "").trim();
   const visible = (node) => { const s = getComputedStyle(node), r = node.getBoundingClientRect(); return s.display !== "none" && s.visibility !== "hidden" && Number(s.opacity) !== 0 && r.width > 0 && r.height > 0; };
   const purchaseLabel = (text) => [/^立即购买$/, /^购买(?:套餐|方案|计划)?$/, /^立即订阅$/, /^订阅(?:套餐|方案|计划)?$/, /^特惠订阅$/].some((re) => re.test(text));
-  const planStatusLabel = (text) => purchaseLabel(text) || /^(暂时售罄|售罄)/.test(text);
+  const planStatusLabel = (text) => purchaseLabel(text) || /^(暂时售罄|售罄|(?:抢购|购买)人数过多(?:，?请刷新再试)?)/.test(text);
   const compact=(v,max)=>String(v??"").replace(/\s+/g,"").trim().slice(0,max);
   const periodKey=(label)=>label.includes("月")?"monthly":label.includes("季")?"quarterly":"annual";
   const periodLabels=["连续包月","连续包季","连续包年"];
