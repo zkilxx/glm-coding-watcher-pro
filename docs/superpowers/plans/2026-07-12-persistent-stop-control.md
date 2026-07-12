@@ -2,9 +2,9 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Keep a usable stop control on the GLM page across automatic refreshes and align the popup action buttons.
+**Goal:** Keep a right-top status card with a usable stop control and real refresh count across automatic refreshes, and reorganize the popup monitoring settings.
 
-**Architecture:** The existing content script owns a Shadow DOM floating control whose lifecycle follows the tab-scoped run state. It sends the existing `STOP_MONITORING` message to the background; popup layout remains CSS-only.
+**Architecture:** The content script owns a Shadow DOM status card whose lifecycle follows the tab-scoped run state. The background persists `refreshCount` through a `REFRESH_RECORDED` message before every reload; the popup monitoring settings use a dedicated structured layout stylesheet.
 
 **Tech Stack:** Chrome Manifest V3, vanilla JavaScript, Shadow DOM, CSS, Node test runner.
 
@@ -24,7 +24,7 @@
 
 **Interfaces:**
 - Consumes: `run.active`, `run.clickClaimed`, and background message `STOP_MONITORING`.
-- Produces: `mountMonitorControl()`, `removeMonitorControl()`, and a Shadow DOM stop button.
+- Produces: `mountMonitorControl()`, `removeMonitorControl()`, a Shadow DOM status card, and a stop button.
 
 - [ ] **Step 1: Write the failing test**
 
@@ -37,7 +37,7 @@ Expected: FAIL because the control functions do not exist.
 
 - [ ] **Step 3: Write minimal implementation**
 
-Create one fixed host with an isolated Shadow DOM. Its stop handler disables itself, sends `{type:"STOP_MONITORING"}`, removes the host on success, and displays `重试停止` on failure. Call the lifecycle function from `applyState()` and remove the host after successful clicking.
+Create one right-top fixed host with an isolated Shadow DOM. Render running state, `run.refreshCount`, `settings.scanMs`, and a full-width stop button. Its stop handler disables itself, sends `{type:"STOP_MONITORING"}`, removes the host on success, and displays `重试停止` on failure.
 
 - [ ] **Step 4: Run tests**
 
@@ -51,10 +51,30 @@ git add content.js tests/manifest.test.js
 git commit -m "Add persistent in-page stop control"
 ```
 
-### Task 2: Popup action alignment and documentation
+### Task 2: Persist real refresh count
 
 **Files:**
-- Modify: `popup.css`
+- Modify: `background.js`
+- Modify: `content.js`
+- Modify: `src/state.js`
+- Test: `tests/state.test.js`
+- Test: `tests/manifest.test.js`
+
+**Interfaces:**
+- Consumes: `REFRESH_RECORDED` from the active content script.
+- Produces: `run.refreshCount`, initialized to `0` and incremented before `location.reload()`.
+
+- [ ] **Step 1: Write failing tests** for zero initialization, increment handling, and refresh-before-reload ordering.
+- [ ] **Step 2: Run tests and confirm failure:** `npm test`.
+- [ ] **Step 3: Implement minimal counter persistence** in state, background, and content script.
+- [ ] **Step 4: Run tests:** `npm test && node --check background.js && node --check content.js`.
+- [ ] **Step 5: Commit:** `git commit -m "Track real page refresh count"`.
+
+### Task 3: Popup monitoring settings and action alignment
+
+**Files:**
+- Create: `popup-actions.css`
+- Modify: `popup.html`
 - Modify: `README.md`
 - Test: `tests/manifest.test.js`
 
@@ -73,7 +93,7 @@ Expected: FAIL against the current `1.3fr 1fr` layout.
 
 - [ ] **Step 3: Implement the CSS and docs**
 
-Set equal grid columns, `align-items:stretch`, full-width buttons, consistent height, and `white-space:nowrap`. Document that the page control returns after reload and can stop monitoring without reopening the popup.
+Create a vertical monitoring-settings panel: a full-width DOM interval field, a separate two-row notification switch group, then equal action columns with full-width buttons. Document that the right-top status card restores its count after reload and can stop monitoring without reopening the popup.
 
 - [ ] **Step 4: Run full verification**
 
@@ -88,4 +108,3 @@ Reload the unpacked extension, start monitoring, confirm the floating control re
 git add popup.css README.md tests/manifest.test.js
 git commit -m "Align popup actions and document page stop"
 ```
-
