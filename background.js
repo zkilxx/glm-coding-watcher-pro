@@ -33,6 +33,17 @@ async function alertUser(settings, selectedPlan) {
   }
 }
 
+async function discoverPlansInTab(tabId) {
+  try {
+    const result = await chrome.tabs.sendMessage(tabId, { type: "DISCOVER_PLANS" });
+    return { ok: true, ...result };
+  } catch {
+    await chrome.scripting.executeScript({target:{tabId},files:["content.js"]});
+    const result = await chrome.tabs.sendMessage(tabId, { type: "DISCOVER_PLANS" });
+    return { ok: true, ...result };
+  }
+}
+
 chrome.runtime.onInstalled.addListener(async () => {
   const { settings } = await readStore();
   await chrome.storage.local.set({ settings });
@@ -91,7 +102,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       return { ok: true };
     }
     if (message.type === "ADD_LOG") { await log(message.message, message.level); return { ok: true }; }
-    if (message.type === "DISCOVER_PLANS") return chrome.tabs.sendMessage(tabId,{type:"DISCOVER_PLANS"});
+    if (message.type === "DISCOVER_PLANS") return discoverPlansInTab(tabId);
     if (message.type === "CLICK_COMPLETED") {
       const run = { ...(store.runs[tabId] ?? {}), active: false, clickClaimed: true, selectedPlan:message.selectedPlan??null, status: "已点击一次，请手动完成后续步骤" };
       await saveRun(run);

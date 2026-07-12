@@ -10,7 +10,7 @@ test("manifest is narrowly scoped Manifest V3", async () => {
   assert.equal(manifest.action.default_popup, "popup.html");
   assert.deepEqual(manifest.host_permissions, ["https://bigmodel.cn/glm-coding*"]);
   assert.deepEqual(manifest.content_scripts[0].matches, ["https://bigmodel.cn/glm-coding*"]);
-  assert.deepEqual([...manifest.permissions].sort(), ["notifications", "storage", "tabs"]);
+  assert.deepEqual([...manifest.permissions].sort(), ["notifications", "scripting", "storage", "tabs"]);
 });
 
 test("runtime is mutation-driven and clears refresh before click", async () => {
@@ -55,3 +55,4 @@ test("popup monitoring settings form clear vertical groups",async()=>{const css=
 test("README embeds every feature screenshot",async()=>{const readme=await readFile("README.md","utf8");for(const name of["popup-overview","plan-priority","monitor-settings","page-status-card"]){const path=`docs/images/${name}.png`;await access(path);assert.match(readme,new RegExp(path.replace("/","\\/")));}assert.match(readme,/## 功能截图/);});
 test("capacity text behaves like sold out while preserving target checks",async()=>{const content=await readFile("content.js","utf8");assert.match(content,/function capacityVisible\(\)\{return \/\(\?:抢购\|购买\)人数过多/);assert.match(content,/请刷新再试/);assert.doesNotMatch(content,/\[role="dialog"\]|\.ant-modal|dismissCapacityNotice/);assert.match(content,/const capacity=capacityVisible\(\);\s*if\(!plansReady\(\)\)\{if\(capacity\)return reloadImmediately\(\);publish\(\{status:"等待套餐加载"\}\);return;\}\s*let currentKey/s);assert.match(content,/for \(const target of settings\.planPriority[\s\S]*if \(token===cycleToken\) reloadImmediately\(\)/);});
 test("capacity-disabled buttons remain discoverable as plan cards",async()=>{const content=await readFile("content.js","utf8");assert.match(content,/planStatusLabel\s*=.*\(\?:抢购\|购买\)人数过多/);assert.match(content,/planStatusLabel\s*=.*请刷新再试/);});
+test("plan discovery reinjects the current content script after extension reload",async()=>{const manifest=JSON.parse(await readFile("manifest.json","utf8"));const background=await readFile("background.js","utf8");const popup=await readFile("popup.js","utf8");assert.ok(manifest.permissions.includes("scripting"));assert.match(background,/async function discoverPlansInTab/);assert.match(background,/chrome\.scripting\.executeScript\(\{target:\{tabId\},files:\["content\.js"\]\}\)/);assert.match(background,/if \(message\.type === "DISCOVER_PLANS"\) return discoverPlansInTab\(tabId\)/);assert.match(popup,/if\(!result\?\.ok\)throw new Error/);});
