@@ -1,4 +1,4 @@
-import { DEFAULT_SETTINGS, normalizeSettings, createRunState, claimSingleClick, appendBoundedLog } from "./src/state.js";
+import { DEFAULT_SETTINGS, normalizeSettings, createRunState, claimSingleClick, recordRefresh, appendBoundedLog } from "./src/state.js";
 
 const STORAGE = { settings: "settings", runs: "runs", logs: "logs" };
 const nowText = () => new Date().toLocaleString("zh-CN", { hour12: false });
@@ -78,6 +78,12 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       const current = store.runs[tabId];
       if (current?.active) await saveRun({ ...current, checks: (current.checks ?? 0) + 1, lastCheckAt: Date.now(), status: message.status });
       return { ok: true };
+    }
+    if (message.type === "REFRESH_RECORDED") {
+      const current = store.runs[tabId];
+      const next = recordRefresh(current);
+      if (next) await saveRun(next);
+      return { ok: true, run: next };
     }
     if (message.type === "RUNTIME_STATUS") {
       const current = store.runs[tabId];

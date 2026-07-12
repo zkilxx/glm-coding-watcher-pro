@@ -30,9 +30,15 @@ export function createRunState(tabId, now = Date.now()) {
     mode: "balanced",
     startedAt: now,
     checks: 0,
+    refreshCount: 0,
     lastCheckAt: null,
     status: "监测中"
   };
+}
+
+export function recordRefresh(state) {
+  if (!state?.active) return state;
+  return { ...state, refreshCount: (state.refreshCount ?? 0) + 1 };
 }
 
 export function claimSingleClick(state) {

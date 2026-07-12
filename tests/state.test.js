@@ -4,6 +4,7 @@ import {
   DEFAULT_SETTINGS,
   normalizeSettings,
   createRunState,
+  recordRefresh,
   claimSingleClick,
   appendBoundedLog
 } from "../src/state.js";
@@ -38,7 +39,10 @@ test("new run is scoped to a tab and starts unclaimed", () => {
   assert.equal(state.runId, "42-12345");
   assert.equal(state.active, true);
   assert.equal(state.clickClaimed, false);
+  assert.equal(state.refreshCount, 0);
 });
+
+test("recording a refresh increments the active run",()=>{const initial=createRunState(42,12345);const next=recordRefresh(initial);assert.equal(next.refreshCount,1);assert.equal(recordRefresh(next).refreshCount,2);});
 
 test("single click claim succeeds exactly once", () => {
   const initial = createRunState(42, 12345);

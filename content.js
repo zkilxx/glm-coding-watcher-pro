@@ -20,9 +20,18 @@
   function clearRefreshTimer() {}
   function clearRuntimeTimers() { cycleToken += 1; if (scanTimer) clearInterval(scanTimer); if (sprintTimer) clearTimeout(sprintTimer); observer?.disconnect(); scanTimer = sprintTimer = observer = null; }
   function publish(patch) { chrome.runtime.sendMessage({ type: "RUNTIME_STATUS", patch }).catch(() => {}); }
-  function reloadImmediately() {
+  function removeMonitorControl(){document.getElementById("glm-watcher-control")?.remove();}
+  function mountMonitorControl(){
+    if(document.getElementById("glm-watcher-control"))return;
+    const host=document.createElement("div");host.id="glm-watcher-control";const root=host.attachShadow({mode:"open"});
+    root.innerHTML=`<style>:host{all:initial;position:fixed;right:20px;top:20px;z-index:2147483647;font-family:Inter,"PingFang SC","Microsoft YaHei",sans-serif}.card{width:210px;padding:14px;border:1px solid rgba(37,99,235,.2);border-radius:14px;background:rgba(255,255,255,.97);box-shadow:0 12px 34px rgba(16,24,40,.2);color:#172033}.title{display:flex;align-items:center;gap:9px;font-size:13px;font-weight:750}.dot{width:8px;height:8px;border-radius:50%;background:#16a36a;box-shadow:0 0 0 3px #dff6eb}.metrics{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:13px 0}.metric{color:#667085;font-size:11px}.metric b{display:block;margin-top:3px;color:#172033;font-size:18px;font-variant-numeric:tabular-nums}button{width:100%;height:34px;border:0;border-radius:8px;background:#dc2626;color:#fff;font:700 12px Inter,"PingFang SC",sans-serif;cursor:pointer}button:hover{background:#b91c1c}button:disabled{cursor:wait;opacity:.65}button:focus-visible{outline:2px solid #93c5fd;outline-offset:2px}</style><div class="card" role="status"><div class="title"><span class="dot"></span>GLM 监测运行中</div><div class="metrics"><span class="metric">刷新次数<b>${run?.refreshCount??0}</b></span><span class="metric">检测间隔<b>${settings?.scanMs??200}ms</b></span></div><button type="button">停止监测</button></div>`;
+    const button=root.querySelector("button");button.addEventListener("click",async()=>{if(button.disabled)return;button.disabled=true;button.textContent="正在停止…";try{const result=await chrome.runtime.sendMessage({type:"STOP_MONITORING"});if(!result?.ok)throw new Error(result?.error||"停止失败");removeMonitorControl();}catch{button.disabled=false;button.textContent="重试停止";}});
+    document.documentElement.append(host);
+  }
+  async function reloadImmediately() {
     if (!run?.active || run.clickClaimed) return;
     publish({ nextRefreshAt: null, backoffReason: "unavailable", status: "不可购买，立即刷新" });
+    await chrome.runtime.sendMessage({type:"REFRESH_RECORDED"});
     location.reload();
   }
   function dismissCapacityNotice() {
@@ -55,7 +64,7 @@
         await chrome.runtime.sendMessage({type:"CHECK_RECORDED",status:selected?.eligible?"发现可用购买按钮":`等待 ${target.name} 可用`});
         if (!selected?.eligible) continue;
         const claim=await chrome.runtime.sendMessage({type:"CLAIM_CLICK"});if(!claim?.claimed)return clearRuntimeTimers();
-        clearRefreshTimer();selected.button.click();run.clickClaimed=true;
+        clearRefreshTimer();removeMonitorControl();selected.button.click();run.clickClaimed=true;
         publish({clickClaimed:true,selectedPlan:{name:selected.name,price:selected.price,billingPeriod:currentKey},nextRefreshAt:null,backoffReason:"clicked",status:`已点击 ${selected.name}，等待手动完成后续步骤`});
         if(settings.soundEnabled)try{const a=new AudioContext(),o=a.createOscillator();o.connect(a.destination);o.frequency.value=880;o.start();o.stop(a.currentTime+.25);}catch{}
         await chrome.runtime.sendMessage({type:"CLICK_COMPLETED",selectedPlan:{name:selected.name,price:selected.price,billingPeriod:currentKey}});return;
@@ -65,6 +74,7 @@
   }
   function applyState(nextRun, nextSettings) {
     clearRuntimeTimers(); run = nextRun; settings = nextSettings;
+    run?.active&&!run.clickClaimed?mountMonitorControl():removeMonitorControl();
     if (!run?.active) return;
     observer = new MutationObserver(() => queueMicrotask(inspect)); observer.observe(document.documentElement,{subtree:true,childList:true,attributes:true,attributeFilter:["disabled","aria-disabled","class"]});
     scanTimer = setInterval(inspect, Math.max(100, settings.scanMs));
